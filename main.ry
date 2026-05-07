@@ -7,68 +7,87 @@ class ExpenseTracker:
     def __init__(self, root):
         self.root = root
         self.root.title("Трекер расходов")
-        self.root.geometry("600x500")
+        self.root.geometry("650x550")
         self.expenses = self.load_data()
 
         # Поля ввода
-        tk.Label(root, text="Сумма:").grid(row=0, column=0, padx=10, pady=5)
-        self.amount_entry = tk.Entry(root)
-        self.amount_entry.grid(row=0, column=1)
+        frame_input = tk.Frame(root)
+        frame_input.pack(pady=10)
 
-        tk.Label(root, text="Категория:").grid(row=1, column=0, padx=10, pady=5)
-        self.category_entry = tk.Entry(root)
-        self.category_entry.grid(row=1, column=1)
+        tk.Label(frame_input, text="Сумма:").grid(row=0, column=0)
+        self.amount_entry = tk.Entry(frame_input)
+        self.amount_entry.grid(row=0, column=1, padx=5)
 
-        tk.Label(root, text="Дата (ГГГГ-ММ-ДД):").grid(row=2, column=0, padx=10, pady=5)
-        self.date_entry = tk.Entry(root)
+        tk.Label(frame_input, text="Категория:").grid(row=0, column=2)
+        self.category_entry = tk.Entry(frame_input)
+        self.category_entry.grid(row=0, column=3, padx=5)
+
+        tk.Label(frame_input, text="Дата (ГГГГ-ММ-ДД):").grid(row=1, column=0, pady=5)
+        self.date_entry = tk.Entry(frame_input)
         self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
-        self.date_entry.grid(row=2, column=1)
+        self.date_entry.grid(row=1, column=1, pady=5)
 
-        # Кнопки
-        tk.Button(root, text="Добавить расход", command=self.add_expense, bg="green", fg="white").grid(row=3, column=0, columnspan=2, pady=10)
+        tk.Button(root, text="Добавить расход", command=self.add_expense, bg="green", fg="white").pack(pady=5)
         
+        # Фильтрация (Пункт №1 в рекомендациях)
+        frame_filter = tk.LabelFrame(root, text="Фильтрация")
+        frame_filter.pack(fill="x", padx=10, pady=5)
+        
+        tk.Label(frame_filter, text="По категории:").grid(row=0, column=0, padx=5)
+        self.filter_entry = tk.Entry(frame_filter)
+        self.filter_entry.grid(row=0, column=1)
+        tk.Button(frame_filter, text="Применить", command=self.update_tree).grid(row=0, column=2, padx=5)
+
         # Таблица
         self.tree = ttk.Treeview(root, columns=("Сумма", "Категория", "Дата"), show='headings')
         self.tree.heading("Сумма", text="Сумма")
         self.tree.heading("Категория", text="Категория")
         self.tree.heading("Дата", text="Дата")
-        self.tree.grid(row=4, column=0, columnspan=3, padx=10)
+        self.tree.pack(padx=10, fill="both", expand=True)
+
+        self.total_label = tk.Label(root, text="Итого: 0", font=("Arial", 12, "bold"))
+        self.total_label.pack(pady=10)
 
         self.update_tree()
-
-        # Итого
-        self.total_label = tk.Label(root, text="Итого: 0", font=("Arial", 12, "bold"))
-        self.total_label.grid(row=5, column=0, columnspan=2, pady=10)
 
     def add_expense(self):
-        amount = self.amount_entry.get()
-        category = self.category_entry.get()
-        date = self.date_entry.get()
+        amount = self.amount_entry.get().strip()
+        category = self.category_entry.get().strip()
+        date = self.date_entry.get().strip()
 
-        # Валидация
-        try:
-            if float(amount) <= 0: raise ValueError
-            datetime.strptime(date, "%Y-%m-%d")
-        except ValueError:
-            messagebox.showerror("Ошибка", "Проверьте сумму (число > 0) и формат даты (ГГГГ-ММ-ДД)")
+        # Расширенная валидация (Пункт №2)
+        if not amount or not category:
+            messagebox.showerror("Ошибка", "Все поля должны быть заполнены!")
             return
 
-        self.expenses.append({"amount": float(amount), "category": category, "date": date})
+        try:
+            val = float(amount)
+            if val <= 0: raise ValueError
+            datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            messagebox.showerror("Ошибка", "Сумма должна быть > 0, дата в формате ГГГГ-ММ-ДД")
+            return
+
+        self.expenses.append({"amount": val, "category": category, "date": date})
         self.save_data()
         self.update_tree()
-        messagebox.showinfo("Успех", "Запись добавлена!")
 
     def update_tree(self):
         for i in self.tree.get_children(): self.tree.delete(i)
+        filter_val = self.filter_entry.get().lower()
         total = 0
         for exp in self.expenses:
-            self.tree.insert("", "end", values=(exp['amount'], exp['category'], exp['date']))
-            total += exp['amount']
-        self.total_label.config(text=f"Итого: {total}")
+            if filter_val in exp['category'].lower():
+                self.tree.insert("", "end", values=(exp['amount'], exp['category'], exp['date']))
+                total += exp['amount']
+        self.total_label.config(text=f"Итого за выбранный период/категорию: {total}")
 
     def save_data(self):
-        with open("data.json", "w", encoding="utf-8") as f:
-            json.dump(self.expenses, f, ensure_ascii=False, indent=4)
+        try:
+            with open("data.json", "w", encoding="utf-8") as f:
+                json.dump(self.expenses, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось сохранить файл: {e}")
 
     def load_data(self):
         try:
